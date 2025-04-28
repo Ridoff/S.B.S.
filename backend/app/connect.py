@@ -1,17 +1,57 @@
 import psycopg2
-from psycopg2 import OperationalError
+from cryptography.fernet import Fernet
+from dotenv import dotenv_values
+from io import StringIO
 
-def create_connection(db_name, db_user, db_password, db_host, db_port):
-    connection = None
+def load_key():
+    """Загрузка ключа шифрования"""
+    key_path = r"C:\Users\artwi\Desktop\secrets\secret.key"
     try:
-        connection = psycopg2.connect(
-            database=db_name,
-            user=db_user,
-            password=db_password,
-            host=db_host,
-            port=db_port,
+        with open(key_path, 'rb') as f:
+            key = f.read().strip()
+            if len(key) != 44:
+                raise ValueError("Неверная длина ключа шифрования")
+            return key
+    except Exception as e:
+        raise RuntimeError(f"Ошибка загрузки ключа: {e}")
+
+def decrypt_db_config():
+    """Расшифровка конфигурации БД"""
+    try:
+        key = load_key()
+        fernet = Fernet(key)
+
+        encrypted_path = r"C:\Users\artwi\Desktop\secrets\dataBD.enc"
+        with open(encrypted_path, 'rb') as f:
+            encrypted_data = f.read()
+
+        decrypted_data = fernet.decrypt(encrypted_data).decode('utf-8')
+        return dotenv_values(stream=StringIO(decrypted_data))
+
+    except Exception as e:
+        raise RuntimeError(f"Ошибка расшифровки конфига БД: {e}")
+
+def create_connection():
+    """Создание подключения к PostgreSQL с правильной кодировкой"""
+    config = decrypt_db_config()
+    try:
+        conn = psycopg2.connect(
+            host=config['DB_HOST'],
+            database=config['DB_NAME'],
+            user=config['DB_USER'],
+            password=config['DB_PASSWORD'],
+            port=config['DB_PORT'],
+            connect_timeout=5,
         )
-        print("Подключение к PostgreSQL успешно установлено")
-    except OperationalError as e:
-        print(f"Ошибка подключения к PostgreSQL: '{e}'")
-    return connection
+        # Явно ставим кодировку UTF8
+        conn.set_client_encoding('UTF8')
+
+        # Проверяем результат (можно убрать потом, если всё стабильно)
+        cur = conn.cursor()
+        cur.execute("SHOW client_encoding;")
+        client_enc = cur.fetchone()
+
+        return conn
+    except Exception as e:
+        print(f"Ошибка подключения к БД: {e}")
+        return None
