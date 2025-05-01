@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, simpledialog
 from connect import create_connection
 from theme import app_theme
 
+
 class ModeratorDashboard:
     def __init__(self, root, username):
         self.root = root
@@ -138,9 +139,10 @@ class ModeratorDashboard:
 
             cursor.execute("""
                 SELECT u.login, u.user_type, u.registration_date, 
-                       a.position, a.created_at
+                       a.position, a.created_at, c.name
                 FROM users u
                 LEFT JOIN administrators a ON u.id = a.user_id
+                LEFT JOIN companies c ON a.company_id = c.id
                 WHERE u.id = %s
             """, (self.user_id,))
 
@@ -152,7 +154,8 @@ class ModeratorDashboard:
                 style='TLabel'
             ).pack(anchor='w', pady=5)
 
-            user_type = "Обычный пользователь" if user_data[1] == 1 else "Модератор" if user_data[1] == 2 else "Администратор"
+            user_type = "Обычный пользователь" if user_data[1] == 1 else "Модератор" if user_data[
+                                                                                            1] == 2 else "Администратор"
             ttk.Label(
                 info_frame,
                 text=f"Тип пользователя: {user_type}",
@@ -172,6 +175,13 @@ class ModeratorDashboard:
                     text=f"Должность: {user_data[3]}",
                     style='TLabel'
                 ).pack(anchor='w', pady=5)
+
+                if user_data[5]:
+                    ttk.Label(
+                        info_frame,
+                        text=f"Компания: {user_data[5]}",
+                        style='TLabel'
+                    ).pack(anchor='w', pady=5)
 
                 admin_since = user_data[4].strftime('%d.%m.%Y') if user_data[4] else "не указана"
                 ttk.Label(
@@ -323,7 +333,7 @@ class ModeratorDashboard:
         tree_frame = tk.Frame(parent, bg=app_theme.colors['background'])
         tree_frame.pack(expand=True, fill=tk.BOTH, pady=10)
 
-        columns = ("id", "user_id", "login", "position", "created_at")
+        columns = ("id", "user_id", "login", "position", "company", "created_at")
         self.admins_tree = ttk.Treeview(
             tree_frame,
             columns=columns,
@@ -332,9 +342,9 @@ class ModeratorDashboard:
             style='Custom.Treeview'
         )
 
-        col_widths = [50, 60, 200, 250, 120]
+        col_widths = [50, 60, 200, 200, 150, 120]
         for col, text, width in zip(columns,
-                                    ["ID", "User ID", "Логин", "Должность", "Назначен"],
+                                    ["ID", "User ID", "Логин", "Должность", "Компания", "Назначен"],
                                     col_widths):
             self.admins_tree.heading(col, text=text)
             self.admins_tree.column(col, width=width, anchor='center')
@@ -409,7 +419,7 @@ class ModeratorDashboard:
                 conn.close()
 
     def load_admins_data(self, tree):
-        """Загрузка данных администраторов в таблицу"""
+        """Загрузка данных администраторов с информацией о компаниях"""
         try:
             conn = create_connection()
             cursor = conn.cursor()
@@ -417,8 +427,15 @@ class ModeratorDashboard:
             for item in tree.get_children():
                 tree.delete(item)
 
+            # Получаем всех администраторов и их компании
             cursor.execute("""
                 SELECT a.id, a.user_id, a.login, a.position, 
+                       COALESCE(
+                           (SELECT string_agg(c.name, ', ') 
+                            FROM companies c 
+                            WHERE a.user_id = ANY(c.employee_ids)),
+                           'Системный администратор'
+                       ),
                        TO_CHAR(a.created_at, 'DD.MM.YYYY')
                 FROM administrators a
                 ORDER BY a.created_at DESC
@@ -453,7 +470,7 @@ class ModeratorDashboard:
 
         action_window = tk.Toplevel(self.root)
         action_window.title("Управление доступом")
-        action_window.geometry("400x300")
+        action_window.geometry("400x400")
         action_window.configure(bg=app_theme.colors['background'])
         app_theme.center_window(action_window)
 
@@ -495,18 +512,53 @@ class ModeratorDashboard:
             style='TRadiobutton'
         ).pack(anchor='w', padx=20)
 
+        # Фрейм для выбора компании
+        company_frame = tk.Frame(main_frame, bg=app_theme.colors['background'])
+
+        ttk.Label(
+            company_frame,
+            text="Компания:",
+            style='TLabel'
+        ).pack(anchor='w', pady=5)
+
+        company_var = tk.StringVar()
+        company_combobox = ttk.Combobox(
+            company_frame,
+            textvariable=company_var,
+            state='readonly'
+        )
+        company_combobox.pack(fill=tk.X, pady=5)
+
+        # Загружаем список компаний
+        try:
+            conn = create_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name FROM companies ORDER BY name")
+            companies = cursor.fetchall()
+            company_combobox['values'] = [f"{name} (ID: {id})" for id, name in companies]
+            if companies:
+                company_combobox.current(0)
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить список компаний: {e}")
+        finally:
+            if conn:
+                conn.close()
+
         def toggle_admin_fields():
             new_type = user_type_var.get()
-            if new_type == "Администратор" and is_admin:
+            if new_type == "Администратор":
                 admin_frame.pack(pady=10)
+                company_frame.pack(pady=10)
             else:
                 admin_frame.pack_forget()
+                company_frame.pack_forget()
 
         user_type_var.trace("w", lambda *args: toggle_admin_fields())
 
         admin_frame = tk.Frame(main_frame, bg=app_theme.colors['background'])
         if is_admin:
             admin_frame.pack(pady=10)
+            company_frame.pack(pady=10)
 
         ttk.Label(
             admin_frame,
@@ -582,39 +634,67 @@ class ModeratorDashboard:
                         if admin_action == "change":
                             new_position = simpledialog.askstring(
                                 "Изменение должности",
-                                f"Введите новую должность для пользователя {login}:",
+                                f"Введите новую должность для {login}:",
                                 parent=self.root
                             )
                             if not new_position:
-                                action_window.destroy()
                                 return
+
+                            # Обновляем должность
                             cursor.execute("""
-                                UPDATE administrators 
-                                SET position = %s
-                                WHERE user_id = %s
-                            """, (new_position, user_id))
-                            conn.commit()
-                            messagebox.showinfo("Успех", "Должность успешно обновлена")
+                                       UPDATE administrators 
+                                       SET position = %s
+                                       WHERE user_id = %s
+                                   """, (new_position, user_id))
+                            # Если выбрана компания - обновляем привязку
+                            selected_company = company_var.get()
+                            if selected_company and not selected_company.startswith("Системный"):
+                                company_id = int(selected_company.split("(ID: ")[1].rstrip(")"))
+
+                                # Добавляем в выбранную компанию
+                                cursor.execute("""
+                                           UPDATE companies 
+                                           SET employee_ids = array_append(employee_ids, %s)
+                                           WHERE id = %s
+                                       """, (user_id, company_id))
+
                         elif admin_action == "remove":
+                            # Удаляем из administrators и из всех компаний
                             cursor.execute("DELETE FROM administrators WHERE user_id = %s", (user_id,))
-                            conn.commit()
-                            messagebox.showinfo("Успех", "Права администратора сняты")
-                    else:
+                            cursor.execute("""
+                                       UPDATE companies 
+                                       SET employee_ids = array_remove(employee_ids, %s)
+                                   """, (user_id,))
+
+                    else:  # Назначение нового администратора
                         position = simpledialog.askstring(
                             "Назначение администратора",
-                            f"Введите должность для пользователя {login}:",
+                            f"Введите должность для {login}:",
                             parent=self.root
                         )
                         if not position:
-                            action_window.destroy()
                             return
+
+                        # Добавляем в таблицу администраторов
                         cursor.execute("""
-                            INSERT INTO administrators (user_id, login, position)
-                            VALUES (%s, %s, %s)
-                        """, (user_id, login, position))
+                                   INSERT INTO administrators (user_id, login, position)
+                                   VALUES (%s, %s, %s)
+                               """, (user_id, login, position))
+
+                        # Если выбрана компания - добавляем в employee_ids
+                        selected_company = company_var.get()
+                        if selected_company and not selected_company.startswith("Системный"):
+                            company_id = int(selected_company.split("(ID: ")[1].rstrip(")"))
+                            cursor.execute("""
+                                       UPDATE companies 
+                                       SET employee_ids = array_append(COALESCE(employee_ids, '{}'::int[]), %s)
+                                       WHERE id = %s
+                                   """, (user_id, company_id))
+
                         conn.commit()
                         messagebox.showinfo("Успех", "Пользователь успешно назначен администратором")
 
+                conn.commit()
                 self.load_users_data(self.users_tree)
                 self.load_moderators_data(self.moderators_tree)
                 self.load_admins_data(self.admins_tree)

@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, Frame
+
+from admin import run_admin_dashboard
 from connect import create_connection
 import hashlib
 
@@ -137,7 +139,27 @@ class LoginApp:
                     else:
                         messagebox.showerror("Ошибка", "Неверный логин или пароль")
                 case 2:
-                    print("2")
+                    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT id FROM administrators WHERE login = %s", login)
+                    moder = cursor.fetchone()
+
+                    if moder:
+                        self.root.destroy()
+                        from user import run_user_dashboard
+                        run_admin_dashboard(login)
+                    else:
+                        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+                        cursor.execute(
+                            "SELECT id, login FROM users WHERE login = %s AND password = %s AND user_type = %s",
+                            (login, hashed_password, user_type))
+
+                        user = cursor.fetchone()
+                        if user:
+                            messagebox.showerror("Внимание", "Ваш аккаунт еще не был подтвержден")
+                        else:
+                            messagebox.showerror("Ошибка", "Неверный логин или пароль")
                 case 3:
                         hashed_password = hashlib.sha256(password.encode()).hexdigest()
                         cursor = conn.cursor()
