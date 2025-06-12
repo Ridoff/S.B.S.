@@ -1,0 +1,28 @@
+.hall {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 80px);
+  gap: 10px;
+  background-image: url('../assets/hall_plan.jpg');
+  background-size: cover;
+  background-position: center;
+  padding: 20px;
+  border: 2px solid #ccc;
+  min-height: 300px;
+}
+
+.table {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  background-color: gray;
+  color: white;
+  transition: background-color 0.3s;
+}
+
+.table.available { background-color: green; }
+.table.occupied  { background-color: red; cursor: not-allowed; }
+.table.selected  { background-color: rgb(0, 255, 149); }

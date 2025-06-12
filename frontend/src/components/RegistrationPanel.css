@@ -1,0 +1,78 @@
+.registration-container {
+  background: #1a0d1a;
+  background-image: radial-gradient(circle, #ff0000 1px, transparent 1px);
+  background-size: 20px 20px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: Arial, sans-serif;
+}
+
+.registration-logo {
+  width: 50px;
+  margin-bottom: 20px;
+}
+
+.registration-title {
+  font-size: 2.5em;
+  color: #ff4040;
+  margin-bottom: 40px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.registration-form {
+  background: rgba(255, 64, 64, 0.2);
+  padding: 20px;
+  border: 2px solid #ff8080;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 300px;
+}
+
+.registration-input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: none;
+  background: #333;
+  color: #fff;
+  border-radius: 5px;
+}
+
+.registration-button {
+  background: #ff4040;
+  border: 2px solid #ff8080;
+  color: #fff;
+  padding: 10px 20px;
+  margin-top: 20px;
+  font-size: 1.2em;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background 0.3s;
+}
+
+.registration-button:hover {
+  background: #ff8080;
+}
+
+.registration-back {
+  background: none;
+  border: none;
+  color: #ff4040;
+  margin-top: 10px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+.registration-copyright {
+  position: absolute;
+  bottom: 20px;
+  color: #ff4040;
+  font-size: 0.8em;
+}
