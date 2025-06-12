@@ -5,7 +5,7 @@ from io import StringIO
 
 def load_key():
     """Загрузка ключа шифрования"""
-    key_path = r"C:\Users\artwi\Desktop\secrets\secret.key"
+    key_path = r"/Users/riddofftsss/SBSDB/keys/secret.key"
     try:
         with open(key_path, 'rb') as f:
             key = f.read().strip()
@@ -21,7 +21,7 @@ def decrypt_db_config():
         key = load_key()
         fernet = Fernet(key)
 
-        encrypted_path = r"C:\Users\artwi\Desktop\secrets\dataBD.enc"
+        encrypted_path = r"/Users/riddofftsss/SBSDB/keys/dataBD.enc"
         with open(encrypted_path, 'rb') as f:
             encrypted_data = f.read()
 
@@ -43,10 +43,8 @@ def create_connection():
             port=config['DB_PORT'],
             connect_timeout=5,
         )
-        # Явно ставим кодировку UTF8
         conn.set_client_encoding('UTF8')
 
-        # Проверяем результат (можно убрать потом, если всё стабильно)
         cur = conn.cursor()
         cur.execute("SHOW client_encoding;")
         client_enc = cur.fetchone()

@@ -1,93 +1,82 @@
-from tkinter import Tk, Button, Label, Frame
-from registration import run_registration
-from login import run_login
-from theme import app_theme
-from connect import create_connection
-from tkinter import messagebox
-import tkinter as tk
-import psycopg2.extensions
-psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
-psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
+from fastapi import FastAPI, Request, UploadFile, File, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from auth.routes import router as auth_router
+from routes import tables
+from auth.db_models import Table, User, get_db
+import os
+import cv2
+import numpy as np
+from sqlalchemy.orm import Session
 
-def show_main_menu():
-    root = Tk()
-    root.title("Главное меню")
+app = FastAPI(
+    title="Seatly API",
+    description="API for Seatly Smart Restaurant Booking System",
+    version="1.0.0"
+)
 
-    app_theme.init_fonts(root)
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://seatly.com"
+]
 
-    root.geometry(app_theme.sizes['window'])
-    root.resizable(False, False)
-    root.configure(bg=app_theme.colors['background'])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    main_frame = Frame(root,
-                       bg=app_theme.colors['background'],
-                       highlightbackground=app_theme.colors['primary'],
-                       highlightthickness=2,
-                       padx=20,
-                       pady=20)
-    main_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(tables.router)
 
-    Label(main_frame,
-          text="Главное меню",
-          font=app_theme.fonts['title'],
-          bg=app_theme.colors['background'],
-          fg=app_theme.colors['primary'],
-          pady=app_theme.sizes['padding_y']).pack()
+@app.post("/upload_hall/")
+async def upload_hall(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        image_path = os.path.join("uploads", file.filename)
+        os.makedirs("uploads", exist_ok=True)
+        with open(image_path, "wb") as buffer:
+            buffer.write(await file.read())
 
-    separator = Frame(main_frame,
-                      height=2,
-                      bg=app_theme.colors['primary'])
-    separator.pack(fill=tk.X, pady=10)
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        _, thresh = cv2.threshold(img, 240, 255, cv2.THRESH_BINARY_INV)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    button_frame = Frame(main_frame,
-                         bg=app_theme.colors['background'])
-    button_frame.pack(pady=app_theme.sizes['button_padding'])
+        tables_data = []
+        for i, contour in enumerate(contours):
+            (x, y), radius = cv2.minEnclosingCircle(contour)
+            if radius > 10:
+                tables_data.append({'id': i + 1, 'x': int(x) // 40, 'y': int(y) // 40, 'status': 'free'})
 
-    Button(button_frame,
-           text="Регистрация",
-           command=lambda: [root.destroy(), run_registration()],
-           width=app_theme.sizes['button_width'],
-           height=app_theme.sizes['button_height'],
-           bg=app_theme.colors['primary'],
-           fg=app_theme.colors['text_light'],
-           activebackground=app_theme.colors['primary_active'],
-           activeforeground=app_theme.colors['text_light'],
-           font=app_theme.fonts['button'],
-           relief=tk.RAISED,
-           bd=3,
-           highlightbackground=app_theme.colors['highlight'],
-           highlightthickness=1).pack(pady=app_theme.sizes['button_padding'])
+        for table in tables_data:
+            new_table = Table(id=table['id'], x=table['x'], y=table['y'], status=table['status'])
+            db.merge(new_table)
+        db.commit()
 
-    Button(button_frame,
-           text="Вход",
-           command=lambda: [root.destroy(), run_login()],
-           width=app_theme.sizes['button_width'],
-           height=app_theme.sizes['button_height'],
-           bg=app_theme.colors['secondary'],
-           fg=app_theme.colors['text_light'],
-           activebackground=app_theme.colors['secondary_active'],
-           activeforeground=app_theme.colors['text_light'],
-           font=app_theme.fonts['button'],
-           relief=tk.RAISED,
-           bd=3,
-           highlightbackground=app_theme.colors['highlight'],
-           highlightthickness=1).pack(pady=app_theme.sizes['button_padding'])
+        os.remove(image_path)
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "tables": tables_data}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": str(e)}
+        )
 
-    app_theme.center_window(root)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)}
+    )
 
-    root.mainloop()
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Seatly API!"}
 
-def main():
-    conn = create_connection()
-    if not conn:
-        messagebox.showerror("Ошибка", "Не удалось подключиться к базе данных")
-        return
-
-    messagebox.showinfo("Успех", "Подключение к БД установлено")
-    conn.close()
-
-    show_main_menu()
-
-if __name__ == "__main__":
-    main()
-
+with next(get_db()) as db:
+    Table.metadata.create_all(bind=db.bind)
+    User.metadata.create_all(bind=db.bind)
