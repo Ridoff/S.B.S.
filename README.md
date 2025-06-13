@@ -5,3 +5,12 @@ This system is designed to facilitate the basic process of booking a table in re
 Using a universal interactive map of the hall, you can choose the most suitable place for you, and also filter restaurants depending on your preferences and tastes.
 
 You are welcomed!
+
+
+
+
+
+
+Contributors:
+Tsalikov George;
+Efremov Artem
