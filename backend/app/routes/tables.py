@@ -7,6 +7,7 @@ import jwt
 import os
 import cv2
 import numpy as np
+from unittest.mock import patch
 
 router = APIRouter()
 
@@ -73,3 +74,9 @@ async def upload_hall(
         return {"success": True, "tables": tables_data}
     except Exception as e:
         return {"success": False, "message": str(e)}
+    
+@patch('app.tables.jwt.decode')
+def test_get_tables_with_mock_token(mock_decode, client):
+    mock_decode.return_value = {"sub": "user@example.com"}
+    response = client.get("/tables", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
