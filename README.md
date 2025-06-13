@@ -1,4 +1,4 @@
-# SEATLY
+# Welcome to Seatly!
 Smart Booking System for Restaurants and Cafés
 
 This system is designed to facilitate the basic process of booking a table in restaurants or cafes. 
